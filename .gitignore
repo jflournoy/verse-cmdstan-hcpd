@@ -1,0 +1,8 @@
+.env
+.env.local
+.vscode/
+.DS_Store
+*.swp
+*.swo
+*~
+.history/
