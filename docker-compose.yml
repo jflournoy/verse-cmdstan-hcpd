@@ -1,0 +1,16 @@
+services:
+  rstudio:
+    platform: linux/amd64
+    build: .
+    image: jflournoy/verse-cmdstan-hcpd:latest
+    privileged: true
+    ports:
+      - "9211:8787"
+    environment:
+      - DISABLE_AUTH=true
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "${HOME}/code:/home/rstudio/code"
+      - "${HOME}/data:/home/rstudio/data"
+      - "${HOME}/R:/home/rstudio/R"
+    shm_size: "2gb"
