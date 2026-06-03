@@ -26,4 +26,31 @@ RUN . /etc/os-release \
 # Smoke test: confirm wb_command is on PATH and can report its version.
 RUN wb_command -version | head -5
 
+# ========================================
+# ggseg stack pinned to GitHub main
+# ========================================
+# The CRAN ggseg 2.0.0 + ggsegGlasser 1.0.1 + ggseg.formats 0.0.1 combo
+# is incompatible with ggplot2 4.x: LayerBrain$setup_layer calls
+# as.data.frame() on a brain_atlas S3 list that has no method, and the
+# ggseg_atlas method in ggseg.formats fails on a NULL $core slot under
+# vctrs 1.x. Upstream has fixes on GitHub main. We install all three
+# from main and verify with a build-time smoke test so a bad upstream
+# commit fails the image build rather than silently breaking reports.
+RUN R -q -e ' \
+  options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/jammy/latest")); \
+  remotes::install_github("ggseg/ggseg.formats", upgrade = "never", quiet = TRUE); \
+  remotes::install_github("ggseg/ggseg",         upgrade = "never", quiet = TRUE); \
+  remotes::install_github("ggseg/ggsegGlasser",  upgrade = "never", quiet = TRUE); \
+  for (pkg in c("ggseg", "ggsegGlasser", "ggseg.formats")) { \
+    cat(sprintf("%-15s %s\n", pkg, as.character(packageVersion(pkg)))); \
+  }; \
+  suppressPackageStartupMessages({ library(ggseg); library(ggsegGlasser); library(ggplot2) }); \
+  df <- data.frame(region = c("V1", "MST", "V6"), hemi = "left", val = c(1, -1, 2)); \
+  p <- ggplot(df) + \
+       geom_brain(atlas = ggsegGlasser::glasser, aes(fill = val), \
+                  position = position_brain(side ~ hemi)); \
+  invisible(ggplot2::ggplot_build(p)); \
+  cat("ggseg smoke test: PASS\n") \
+'
+
 WORKDIR /home/rstudio
