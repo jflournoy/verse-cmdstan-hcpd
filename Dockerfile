@@ -50,7 +50,7 @@ RUN R -q -e ' \
   df <- data.frame(region = c("V1", "MST", "V6"), hemi = "left", val = c(1, -1, 2)); \
   p <- ggplot(df) + \
        geom_brain(atlas = glasser_atlas, aes(fill = val), \
-                  position = position_brain(side ~ hemi)); \
+                  position = position_brain(view ~ hemi)); \
   invisible(ggplot2::ggplot_build(p)); \
   cat("ggseg smoke test: PASS\n") \
 '
