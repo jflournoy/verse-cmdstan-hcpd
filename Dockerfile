@@ -45,9 +45,11 @@ RUN R -q -e ' \
     cat(sprintf("%-15s %s\n", pkg, as.character(packageVersion(pkg)))); \
   }; \
   suppressPackageStartupMessages({ library(ggseg); library(ggsegGlasser); library(ggplot2) }); \
+  glasser_atlas <- if (is.function(ggsegGlasser::glasser)) ggsegGlasser::glasser() else ggsegGlasser::glasser; \
+  cat("glasser_atlas class:", paste(class(glasser_atlas), collapse=","), "\n"); \
   df <- data.frame(region = c("V1", "MST", "V6"), hemi = "left", val = c(1, -1, 2)); \
   p <- ggplot(df) + \
-       geom_brain(atlas = ggsegGlasser::glasser, aes(fill = val), \
+       geom_brain(atlas = glasser_atlas, aes(fill = val), \
                   position = position_brain(side ~ hemi)); \
   invisible(ggplot2::ggplot_build(p)); \
   cat("ggseg smoke test: PASS\n") \
