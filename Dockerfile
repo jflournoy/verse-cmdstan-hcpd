@@ -55,4 +55,40 @@ RUN R -q -e ' \
   cat("ggseg smoke test: PASS\n") \
 '
 
+# =============================================================================
+# gratia — simultaneous-interval derivatives for the developmental shape
+# taxonomy.
+#
+# Why gratia rather than a hand-rolled derivative: the shape taxonomy's U /
+# inverted-U test asks whether the fitted age trajectory's FIRST DERIVATIVE
+# credibly changes sign, under a SIMULTANEOUS (whole-curve) interval. gratia
+# implements exactly that construction, is maintained by mgcv's own ecosystem,
+# and keeps the criterion auditable against a published reference rather than
+# against our own linear algebra.
+#
+# Pinned deliberately. An unpinned install would let an upstream change to
+# derivatives() silently alter which parcels are called U-shaped.
+# =============================================================================
+
+# System libraries gratia's dependency tree needs. Most are already present in
+# rocker/verse; listed explicitly so this block is self-contained if the base
+# image changes.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libxml2-dev \
+        libssl-dev \
+        libcurl4-openssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Date-pinned CRAN snapshot: the same URL always resolves to the same sources.
+# The __linux__/jammy prefix serves precompiled binaries for this base image,
+# which keeps the same pin without compiling gratia's tree from source.
+ENV CRAN_SNAPSHOT=https://packagemanager.posit.co/cran/__linux__/jammy/2025-06-02
+
+COPY install_gratia.R /tmp/install_gratia.R
+
+# The script verifies the install by calling derivatives() with the exact
+# arguments the taxonomy uses, so an API drift fails HERE, at build time,
+# instead of silently at analysis time.
+RUN Rscript /tmp/install_gratia.R && rm /tmp/install_gratia.R
+
 WORKDIR /home/rstudio
