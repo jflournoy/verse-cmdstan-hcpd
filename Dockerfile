@@ -26,34 +26,31 @@ RUN . /etc/os-release \
 # Smoke test: confirm wb_command is on PATH and can report its version.
 RUN wb_command -version | head -5
 
-# ========================================
-# ggseg stack pinned to GitHub main
-# ========================================
-# The CRAN ggseg 2.0.0 + ggsegGlasser 1.0.1 + ggseg.formats 0.0.1 combo
-# is incompatible with ggplot2 4.x: LayerBrain$setup_layer calls
-# as.data.frame() on a brain_atlas S3 list that has no method, and the
-# ggseg_atlas method in ggseg.formats fails on a NULL $core slot under
-# vctrs 1.x. Upstream has fixes on GitHub main. We install all three
-# from main and verify with a build-time smoke test so a bad upstream
-# commit fails the image build rather than silently breaking reports.
-RUN R -q -e ' \
-  options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/jammy/latest")); \
-  remotes::install_github("ggseg/ggseg.formats", upgrade = "never", quiet = TRUE); \
-  remotes::install_github("ggseg/ggseg",         upgrade = "never", quiet = TRUE); \
-  remotes::install_github("ggseg/ggsegGlasser",  upgrade = "never", quiet = TRUE); \
-  for (pkg in c("ggseg", "ggsegGlasser", "ggseg.formats")) { \
-    cat(sprintf("%-15s %s\n", pkg, as.character(packageVersion(pkg)))); \
-  }; \
-  suppressPackageStartupMessages({ library(ggseg); library(ggsegGlasser); library(ggplot2) }); \
-  glasser_atlas <- if (is.function(ggsegGlasser::glasser)) ggsegGlasser::glasser() else ggsegGlasser::glasser; \
-  cat("glasser_atlas class:", paste(class(glasser_atlas), collapse=","), "\n"); \
-  df <- data.frame(region = c("V1", "MST", "V6"), hemi = "left", val = c(1, -1, 2)); \
-  p <- ggplot(df) + \
-       geom_brain(atlas = glasser_atlas, aes(fill = val), \
-                  position = position_brain(view ~ hemi)); \
-  invisible(ggplot2::ggplot_build(p)); \
-  cat("ggseg smoke test: PASS\n") \
-'
+# =============================================================================
+# ggseg + ggsegGlasser -- the brain figures.
+#
+# Pinned to explicit commits rather than GitHub HEAD. Unpinned, the image
+# silently moved from ggseg 1.x to 2.x, which changed the atlas from a list to
+# a constructor function and renamed `side` to `view`; downstream code kept
+# targeting 1.x by prepending a host-only user library, and every published
+# brain PNG froze. install_ggseg.R draws a plot at build time so that kind of
+# drift fails HERE.
+#
+# The CRAN combination (ggseg 2.0.0 + ggsegGlasser 1.0.1 + ggseg.formats 0.0.1)
+# is incompatible with ggplot2 4.x -- LayerBrain$setup_layer calls
+# as.data.frame() on a brain_atlas S3 list with no method -- which is why these
+# come from GitHub commits rather than from the snapshot.
+#
+# CRAN_SNAPSHOT is overridden for this step only: the ggsegverse packages come
+# from their SHAs, but their CRAN dependencies (sf, sfheaders, dplyr, tidyr)
+# resolve against this date, and a recent one serves jammy binaries instead of
+# source-building sf.
+# =============================================================================
+
+COPY install_ggseg.R /tmp/install_ggseg.R
+
+RUN CRAN_SNAPSHOT=https://packagemanager.posit.co/cran/__linux__/jammy/2026-08-01 \
+    Rscript /tmp/install_ggseg.R && rm /tmp/install_ggseg.R
 
 # =============================================================================
 # gratia — simultaneous-interval derivatives for the developmental shape
@@ -90,5 +87,64 @@ COPY install_gratia.R /tmp/install_gratia.R
 # arguments the taxonomy uses, so an API drift fails HERE, at build time,
 # instead of silently at analysis time.
 RUN Rscript /tmp/install_gratia.R && rm /tmp/install_gratia.R
+
+# =============================================================================
+# dagitty + ggdag -- report-only dependencies for the causal-DAG reports.
+#
+# Installed into the image rather than at render time: a report that calls
+# install.packages() on itself cannot work in a sealed container and is not
+# reproducible either way. Both versions are current at the image-wide
+# CRAN_SNAPSHOT, so this step inherits it unchanged.
+# =============================================================================
+
+COPY install_dag_packages.R /tmp/install_dag_packages.R
+
+RUN Rscript /tmp/install_dag_packages.R && rm /tmp/install_dag_packages.R
+
+# =============================================================================
+# lme4 -- pinned DOWN from the image's 2.0-1, and built FROM SOURCE.
+#
+# lme4 2.0-x calls a Matrix routine this image's Matrix 1.6.1.1 does not export,
+# so lmer() dies at model construction with
+#   function 'cholmod_factor_ldetA' not provided by package 'Matrix'
+# while the install itself succeeds. Matrix cannot be upgraded to fix it:
+# Matrix 1.7-x declares Depends: R (>= 4.4) and this image is R 4.3.2.
+#
+# The version pin alone is NOT sufficient. A CRAN binary of 1.1-38 is compiled
+# against the build farm's Matrix 1.7-4 and reproduces the identical error --
+# this exact build failed that way once. lme4 compiles Matrix's Matrix_stubs.c
+# from the installed Matrix's headers, so a source build resolves the symbol
+# against 1.6.1.1 and works. install_lme4.R therefore passes type = "source",
+# and verifies by FITTING a model rather than merely loading the package,
+# because the mismatch only surfaces at model construction.
+#
+# The snapshot is overridden here because 1.1-38 does not exist at 2025-06-02
+# (that snapshot carries 1.1-37), and install_version() cannot reach a future
+# version through the CRAN archive. Note the PLAIN snapshot URL, not the
+# __linux__/jammy one used elsewhere: that prefix serves precompiled binaries,
+# which is precisely what must not happen here.
+# =============================================================================
+
+COPY install_lme4.R /tmp/install_lme4.R
+
+RUN CRAN_SNAPSHOT=https://packagemanager.posit.co/cran/2026-02-01 \
+    Rscript /tmp/install_lme4.R && rm /tmp/install_lme4.R
+
+# =============================================================================
+# patchwork -- pinned UP to a version with ggplot2 4.x (S7) theme support.
+#
+# ggplot2 4.0 moved themes to S7; patchwork 1.3.0 has no S7 method for `&`, so
+# the idiom used to apply one theme across a composed figure --
+#     (p_a | p_b) & theme(legend.position = "bottom")
+# -- fails with "Can't find method for generic `&(e1, e2)`". 1.3.2 adds it.
+# install_patchwork.R composes and DRAWS such a figure at build time.
+#
+# Same snapshot override, same reason: 1.3.2 postdates the 2025-06-02 pin.
+# =============================================================================
+
+COPY install_patchwork.R /tmp/install_patchwork.R
+
+RUN CRAN_SNAPSHOT=https://packagemanager.posit.co/cran/__linux__/jammy/2026-02-01 \
+    Rscript /tmp/install_patchwork.R && rm /tmp/install_patchwork.R
 
 WORKDIR /home/rstudio
