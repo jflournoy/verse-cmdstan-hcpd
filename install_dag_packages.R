@@ -20,25 +20,26 @@
 
 PKGS <- c(dagitty = "0.3-4", ggdag = "0.2.13")
 
+REPO <- Sys.getenv("CRAN_SNAPSHOT",
+                   "https://packagemanager.posit.co/cran/2025-06-02")
 lib <- .libPaths()[1]
 message("Installing DAG packages into ", lib)
 
 if (!requireNamespace("remotes", quietly = TRUE)) {
-  install.packages("remotes",
-                   repos = Sys.getenv("CRAN_SNAPSHOT",
-                                      "https://cloud.r-project.org"))
+  install.packages("remotes", repos = REPO)
 }
 
 for (pkg in names(PKGS)) {
-  if (requireNamespace(pkg, quietly = TRUE)) {
-    message(pkg, " already present (", as.character(packageVersion(pkg)), ")")
+  want <- package_version(PKGS[[pkg]])
+  if (requireNamespace(pkg, quietly = TRUE) && packageVersion(pkg) == want) {
+    message(pkg, " ", want, " already present")
     next
   }
   remotes::install_version(pkg, version = PKGS[[pkg]],
-                           repos = Sys.getenv("CRAN_SNAPSHOT", "https://cloud.r-project.org"),
+                           repos = REPO,
                            upgrade = "never", lib = lib)
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    stop("failed to install ", pkg, call. = FALSE)
+  if (!requireNamespace(pkg, quietly = TRUE) || packageVersion(pkg) != want) {
+    stop(sprintf("FAILED to install %s %s", pkg, want), call. = FALSE)
   }
   message("installed ", pkg, " ", as.character(packageVersion(pkg)))
 }
