@@ -71,7 +71,10 @@ RSTUDIO_PORT=8787 docker compose up -d
 
 ## Architecture notes
 
-- **Base image:** `jflournoy/verse-cmdstan:latest` (rocker/ml-verse:4.3.2 + CmdStan)
+- **Base image:** `jflournoy/verse-cmdstan:latest` (rocker/ml-verse:4.3.2 + CmdStan),
+  pinned by digest in the `FROM` line so a rebuilt base cannot change R or any
+  base package underneath the pins. To move it, update the digest and build
+  with `--no-cache`.
 - **Ubuntu codename:** jammy (22.04 LTS) — detected dynamically at build time
 - **Connectome Workbench source:** [NeuroDebian](https://neuro.debian.net/)
 - **GPU support:** NVIDIA CUDA 11.8 (if you have docker with GPU runtime)
@@ -110,6 +113,25 @@ RSTUDIO_PORT=8787 docker compose up -d
   archive; 2026-10-01 is worse, at three of nine. All nine were confirmed to
   resolve with the repos vector the script passes. Splitting the step one
   package per date would restore the rule at the cost of nine more layers.
+- **Dependencies that outrun R 4.3:** a pin's dependencies resolve to whatever
+  the snapshot carries, and a 2026 snapshot carries releases that need a newer
+  R. `energy` imports `gsl`, whose 2.1-9 needs R ≥ 4.5, so the script pins
+  `gsl` 2.1-8 ahead of `energy`. When a build fails with
+  `dependency 'X' is not available`, check the snapshot's `Depends: R` for X
+  and pin the last release that supports R 4.3 the same way. No step falls
+  back to live CRAN: every repo is a dated snapshot.
+- **Build-time guards beyond the per-package checks:**
+  - `check_r_dependencies.R` runs after every R install and fails the build if
+    any installed package's Depends / Imports / LinkingTo constraint, R
+    included, is unmet: an R `pip check`.
+  - `python-constraints.txt` pins every package in `/opt/venv`, transitive
+    dependencies included; pip installs wheels only and runs `pip check`.
+  - The GitHub CLI apt key the base image ships was rotated upstream, which
+    broke every fresh `apt-get update`. The first layer refreshes it and
+    asserts its fingerprint, so the next rotation fails there, by name.
+  - The Workbench smoke test asserts version 2.1.0.
+- **Verify with `docker build --no-cache`.** A cached build reuses old layers
+  and hides upstream rot (that is how the apt key break went unseen).
 
 ## Building from source
 
