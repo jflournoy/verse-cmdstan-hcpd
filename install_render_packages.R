@@ -19,6 +19,15 @@
 # the analysis project's docker/install_render_packages.R; keep the two in sync.
 
 PKGS <- c(
+  # gsl is FIRST and the order matters. energy declares it in Imports, and gsl
+  # is no longer in any current CRAN index -- it is listed by neither the
+  # 2026-08-01 snapshot nor cloud.r-project.org -- so resolving energy's
+  # dependencies from the index fails with "dependency 'gsl' is not available"
+  # and the build dies at the energy step. Installing the pin first satisfies
+  # the dependency before energy asks for it. install_version() reaches it
+  # through the archive, and the base image already carries libgsl.so.27 and
+  # /usr/include/gsl to compile against. Verified 2026-10-14.
+  gsl         = "2.1.8",   # energy's Imports; archived on CRAN, so pinned here
   ciftiTools  = "0.19.0",  # R/subcortical_parcel_geometry.R, dropout audit; its
                            # extdata surfaces feed the raw-signal figure
   energy      = "1.7-12",  # reports/motion_signal_exploration.qmd (dcor)
@@ -44,8 +53,14 @@ for (pkg in names(PKGS)) {
     next
   }
   message("Installing ", pkg, " ", want)
+  # One pinned repo, no fallback. The fallback used to be here because five of
+  # these pins are older than the snapshot head and so come from its archive --
+  # but the snapshot serves its own archive, and all of hexbin, psych, targets,
+  # tarchetypes and kableExtra were verified to resolve from REPO alone on
+  # 2026-10-14. A fallback to cloud.r-project.org is a moving target, which is
+  # the wrong thing to leave in a build whose purpose is a reproducible image.
   remotes::install_version(pkg, version = PKGS[[pkg]], upgrade = "never",
-                           lib = lib, repos = c(REPO, "https://cloud.r-project.org"))
+                           lib = lib, repos = REPO)
   if (!requireNamespace(pkg, quietly = TRUE) || packageVersion(pkg) != want) {
     stop(sprintf("FAILED to install %s %s", pkg, want), call. = FALSE)
   }
