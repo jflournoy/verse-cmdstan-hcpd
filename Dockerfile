@@ -178,4 +178,26 @@ COPY install_render_packages.R /tmp/install_render_packages.R
 RUN CRAN_SNAPSHOT=https://packagemanager.posit.co/cran/__linux__/jammy/2026-08-01 \
     Rscript /tmp/install_render_packages.R && rm /tmp/install_render_packages.R
 
+# =============================================================================
+# Python for scripts/dropout_raw_signal_render.py (dropout.fig_raw_signal).
+#
+# The figure renders raw mean BOLD onto inflated fs_LR surfaces with nilearn,
+# headless. It ran from a host conda env (Python 3.7); these are that env's
+# versions, except numpy, whose 1.19 has no build for the image's Python 3.10.
+# The surfaces come from ciftiTools' extdata, installed above. The check
+# renders a surface, so an API drift fails HERE.
+# =============================================================================
+
+RUN /opt/venv/bin/pip install --no-cache-dir \
+        numpy==1.23.5 pandas==1.3.5 matplotlib==3.5.3 \
+        nibabel==4.0.2 nilearn==0.10.2 \
+    && SURF="$(Rscript -e 'cat(system.file("extdata", "S1200.L.inflated_MSMAll.32k_fs_LR.surf.gii", package = "ciftiTools"))')" \
+    && /opt/venv/bin/python -c "import sys, numpy as np, matplotlib; matplotlib.use('Agg'); from nilearn import plotting, surface; m = surface.load_surf_mesh(sys.argv[1]); f = plotting.plot_surf(m, surf_map=np.zeros(m[0].shape[0]), engine='matplotlib'); f.savefig('/tmp/surf.png'); print('nilearn surface ok')" "$SURF" \
+    && rm -f /tmp/surf.png
+
+# Verified 2026-10-14 that every pin above resolves as a cp310 wheel for the
+# image's Python 3.10.12, so none of them is built from source. The step must
+# stay AFTER install_render_packages.R, because the surface it renders as its
+# check comes from ciftiTools' extdata.
+
 WORKDIR /home/rstudio
