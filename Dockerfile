@@ -209,16 +209,32 @@ RUN CRAN_SNAPSHOT=https://packagemanager.posit.co/cran/__linux__/jammy/2026-08-0
 # renders a surface, so an API drift fails HERE.
 # =============================================================================
 
-RUN /opt/venv/bin/pip install --no-cache-dir \
+COPY python-constraints.txt /tmp/python-constraints.txt
+
+RUN /opt/venv/bin/pip install --no-cache-dir --only-binary=:all: \
+        -c /tmp/python-constraints.txt \
         numpy==1.23.5 pandas==1.3.5 matplotlib==3.5.3 \
         nibabel==4.0.2 nilearn==0.10.2 \
     && SURF="$(Rscript -e 'cat(system.file("extdata", "S1200.L.inflated_MSMAll.32k_fs_LR.surf.gii", package = "ciftiTools"))')" \
     && /opt/venv/bin/python -c "import sys, numpy as np, matplotlib; matplotlib.use('Agg'); from nilearn import plotting, surface; m = surface.load_surf_mesh(sys.argv[1]); f = plotting.plot_surf(m, surf_map=np.zeros(m[0].shape[0]), engine='matplotlib'); f.savefig('/tmp/surf.png'); print('nilearn surface ok')" "$SURF" \
-    && rm -f /tmp/surf.png
+    && /opt/venv/bin/pip check \
+    && rm -f /tmp/surf.png /tmp/python-constraints.txt
 
 # Verified 2026-10-14 that every pin above resolves as a cp310 wheel for the
-# image's Python 3.10.12, so none of them is built from source. The step must
+# image's Python 3.10.12; --only-binary now enforces that, and
+# python-constraints.txt pins their transitive dependencies too. The step must
 # stay AFTER install_render_packages.R, because the surface it renders as its
 # check comes from ciftiTools' extdata.
+
+# =============================================================================
+# Last R step: every installed package's declared dependencies are met.
+#
+# Each install_*.R verifies what it pins; this verifies what those installs did
+# to everything else (a dependency needing a newer R, a pin that needs a newer
+# version of something already here). It must stay after every R install.
+# =============================================================================
+
+COPY check_r_dependencies.R /tmp/check_r_dependencies.R
+RUN Rscript /tmp/check_r_dependencies.R && rm /tmp/check_r_dependencies.R
 
 WORKDIR /home/rstudio
