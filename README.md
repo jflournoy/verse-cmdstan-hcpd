@@ -78,15 +78,33 @@ RSTUDIO_PORT=8787 docker compose up -d
 - **Package pinning:** each `install_*.R` at the repo root installs one pinned
   package (or family) and then *verifies the API the analysis actually calls* —
   gratia fits a GAM and takes a derivative, ggseg draws a brain to a device,
-  lme4 fits `lmer()`, patchwork dispatches `<patchwork> & <theme>`. An upstream
-  API change therefore fails `docker compose build` rather than silently
-  changing results.
+  lme4 fits `lmer()`, patchwork dispatches `<patchwork> & <theme>`, and
+  `install_render_packages.R` exercises each of its nine in turn, kableExtra
+  included. An upstream API change therefore fails `docker compose build`
+  rather than silently changing results.
+- **The nine render packages:** `install_render_packages.R` installs
+  ciftiTools, energy, GGally, hexbin, psych, scico, targets, tarchetypes and
+  kableExtra. Every one of them used to resolve from a host user library and
+  from nowhere else, so the analysis code ran on one machine and nowhere else:
+  under Snakemake, which sets `HOME` to the project, and in this image they
+  were simply absent. `targets` and `tarchetypes` are the sharp end, since
+  `run_pipeline.R` and `_targets.R` cannot load without them, and kableExtra
+  was never in the image at all.
 - **CRAN snapshots:** the image-wide `CRAN_SNAPSHOT` is date-pinned to
   2025-06-02 (the date where gratia 0.10.0 is current). Steps whose pin is
   newer than that override `CRAN_SNAPSHOT` on their own `RUN` line. The rule is
   to pick the snapshot date at which the pinned version is the *current* one, so
   the `__linux__/jammy` binary repo serves it and nothing falls back to the
   source archive.
+- **One step cannot follow that rule, and says so here:**
+  `install_render_packages.R` pins nine packages whose releases fall in
+  different eras, and no single date makes all nine current. Measured
+  2026-10-14, the 2026-08-01 jammy snapshot is the earliest that serves all
+  nine, with ciftiTools, energy, GGally and scico current as binaries and
+  hexbin, psych, targets, tarchetypes and kableExtra coming from the source
+  archive; 2026-10-01 is worse, at three of nine. All nine were confirmed to
+  resolve with the repos vector the script passes. Splitting the step one
+  package per date would restore the rule at the cost of nine more layers.
 
 ## Building from source
 
