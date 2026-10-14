@@ -19,15 +19,17 @@
 # the analysis project's docker/install_render_packages.R; keep the two in sync.
 
 PKGS <- c(
-  # gsl is FIRST and the order matters. energy declares it in Imports, and gsl
-  # is no longer in any current CRAN index -- it is listed by neither the
-  # 2026-08-01 snapshot nor cloud.r-project.org -- so resolving energy's
-  # dependencies from the index fails with "dependency 'gsl' is not available"
-  # and the build dies at the energy step. Installing the pin first satisfies
-  # the dependency before energy asks for it. install_version() reaches it
-  # through the archive, and the base image already carries libgsl.so.27 and
-  # /usr/include/gsl to compile against. Verified 2026-10-14.
-  gsl         = "2.1.8",   # energy's Imports; archived on CRAN, so pinned here
+  # gsl is FIRST and the order matters. energy declares it in Imports, and the
+  # index's current gsl, 2.1-9, declares Depends: R (>= 4.5.0). This image is
+  # R 4.3.2, so available.packages() filters 2.1-9 out and gsl LOOKS absent
+  # from every index (snapshot and cloud.r-project.org alike); resolving
+  # energy's dependencies then fails with "dependency 'gsl' is not available"
+  # and the build dies at the energy step. Installing 2.1-8, the last release
+  # that supports R 4.3, first satisfies the dependency before energy asks for
+  # it. install_version() reaches it through the snapshot's archive, and the
+  # base image already carries libgsl.so.27 and /usr/include/gsl to compile
+  # against. Verified 2026-10-14.
+  gsl         = "2.1.8",   # energy's Imports; 2.1-9 needs R >= 4.5, so pinned here
   ciftiTools  = "0.19.0",  # R/subcortical_parcel_geometry.R, dropout audit; its
                            # extdata surfaces feed the raw-signal figure
   energy      = "1.7-12",  # reports/motion_signal_exploration.qmd (dcor)

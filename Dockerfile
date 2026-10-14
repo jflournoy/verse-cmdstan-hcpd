@@ -180,12 +180,15 @@ RUN CRAN_SNAPSHOT=https://packagemanager.posit.co/cran/__linux__/jammy/2026-02-0
 # to carry a fallback that dropped the table's cell coloring silently; the
 # fallback is gone, so the report now fails without the package.
 #
-# Measured 2026-10-14: all nine of this script's pins resolve from a 2026-08-01
-# snapshot, five of them do not resolve from the image-wide 2025-06-02 pin
+# Measured 2026-10-14: all nine of this script's original pins resolve from a
+# 2026-08-01 snapshot, five of them do not resolve from the image-wide 2025-06-02 pin
 # (ciftiTools, GGally, psych, targets, tarchetypes are all newer than its
 # heads), and ciftiTools 0.19.0 does not resolve from 2026-02-01 either. Hence
 # the override to the same 2026-08-01 snapshot the ggsegverse step uses, rather
 # than a fallback to a moving mirror.
+#
+# gsl, which energy imports, is pinned to 2.1-8 from that snapshot's CRAN
+# archive: its current 2.1-9 needs R >= 4.5, and this image runs R 4.3.
 #
 # The script pins every version and then exercises each package the way the
 # code does, so a resolution that cannot do the job fails HERE, at build time.
