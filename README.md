@@ -90,6 +90,11 @@ RSTUDIO_PORT=8787 docker compose up -d
   were simply absent. `targets` and `tarchetypes` are the sharp end, since
   `run_pipeline.R` and `_targets.R` cannot load without them, and kableExtra
   was never in the image at all.
+- **Python:** `/opt/venv` carries the stack
+  `scripts/dropout_raw_signal_render.py` needs, pinned to numpy 1.23.5,
+  pandas 1.3.5, matplotlib 3.5.3, nibabel 4.0.2 and nilearn 0.10.2. The step
+  renders an inflated fs_LR surface from ciftiTools' extdata as its check, so
+  it runs after `install_render_packages.R` and an API drift fails the build.
 - **CRAN snapshots:** the image-wide `CRAN_SNAPSHOT` is date-pinned to
   2025-06-02 (the date where gratia 0.10.0 is current). Steps whose pin is
   newer than that override `CRAN_SNAPSHOT` on their own `RUN` line. The rule is
