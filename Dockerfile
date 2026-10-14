@@ -1,4 +1,8 @@
-FROM jflournoy/verse-cmdstan:latest
+# Pinned by digest: `latest` alone moves whenever the base is rebuilt, and with
+# it R, every base package, and the system libraries the pins below are
+# verified against. Tag kept for readability; the digest is what Docker uses.
+# To move the base: update the digest, then build with --no-cache.
+FROM jflournoy/verse-cmdstan:latest@sha256:54e47ce68a53b0575af40b194cdfa950c5faa71a002d2afee614c4485a42371e
 LABEL maintainer="John Flournoy <jcflournoyphd@pm.me>"
 
 # ========================================
@@ -7,6 +11,17 @@ LABEL maintainer="John Flournoy <jcflournoyphd@pm.me>"
 # Installs from NeuroDebian. wb_command -show-scene renders scenes
 # headlessly via OSMesa, so no X server/VNC is required.
 USER root
+
+# The base image's GitHub CLI apt source carries a keyring GitHub has since
+# rotated (NO_PUBKEY 5612B36462313325), so every fresh `apt-get update` failed;
+# only cached layers hid it. Refresh it, and assert the fingerprint, so the next
+# rotation fails HERE with a clear message instead of at some later apt step.
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+        -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+ && gpg --show-keys --with-colons /usr/share/keyrings/githubcli-archive-keyring.gpg \
+      | grep -q '^fpr:::::::::7F38BBB59D064DBCB3D84D725612B36462313325:$' \
+ || { echo "GitHub CLI apt key changed: update the fingerprint in the Dockerfile" >&2; exit 1; }
+
 RUN . /etc/os-release \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -23,8 +38,11 @@ RUN . /etc/os-release \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-# Smoke test: confirm wb_command is on PATH and can report its version.
-RUN wb_command -version | head -5
+# Smoke test: wb_command is on PATH and is the version the README documents.
+# Not pinned in apt, because NeuroDebian drops old builds and a pin would only
+# break the build; a new version fails HERE instead, to be checked and recorded.
+RUN wb_command -version | head -5 \
+ && wb_command -version | grep -qx 'Version: 2.1.0'
 
 # =============================================================================
 # ggseg + ggsegGlasser -- the brain figures.
